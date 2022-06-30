@@ -70,7 +70,7 @@ fn parse_octet(octet: &str) -> Result<u8, <IpAddressBlock as FromStr>::Err> {
 }
 
 fn extract_address_and_mask(s: &str) -> Result<([u8; 4], u8), <IpAddressBlock as FromStr>::Err> {
-    let octets = s.split(".").collect::<Vec<_>>();
+    let octets = s.split('.').collect::<Vec<_>>();
 
     if octets.len() != 4 {
         return Err(IpAddressParseError {
@@ -81,11 +81,10 @@ fn extract_address_and_mask(s: &str) -> Result<([u8; 4], u8), <IpAddressBlock as
     let mut address = [0_u8; 4];
     let mut mask = 0_u8;
 
-
     for (idx, &octet) in octets.iter().enumerate() {
         // Last part, which is composed of the last octet and the mask
         if idx == 3 {
-            let mut last_iter = octet.split("/");
+            let mut last_iter = octet.split('/');
 
             // Split iterator returns at least one Some
             let octet_str = last_iter.next().unwrap();
@@ -110,7 +109,7 @@ impl FromStr for IpAddressBlock {
     type Err = IpAddressParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (address, mask) = extract_address_and_mask(&s)?;
+        let (address, mask) = extract_address_and_mask(s)?;
 
         if mask <= 32 {
             Ok(Self::new(address, mask))
