@@ -44,10 +44,15 @@ impl Display for IpAddressParseError {
 }
 
 // Minimum bits needed to represent the quantity num
-fn minimum_bits_needed(mut num: usize) -> usize {
+// Returns u8 because it is the minimum primitive type
+// which can hold the maximum number of usize
+fn minimum_bits_needed(mut num: usize) -> u8 {
+    if num == 0 {
+        panic!("num is equal to 0");
+    }
+
     let mut counter = 0;
     num -= 1;
-
     while num != 0 {
         num >>= 1;
         counter += 1;
@@ -75,31 +80,48 @@ impl IpAddressBlock {
     }
 
     pub fn subnet_flsm(&self, num_networks: usize) -> Vec<Self> {
-        // Check it is possible to perform the subnetting
-        let bits_needed = minimum_bits_needed(num_networks);
-        let new_mask = self.mask + bits_needed as u8;
+        let new_mask = match self.new_mask_for(num_networks) {
+            Some(mask) => mask,
+            None => return Vec::new(),
+        };
 
-        if new_mask > 32 {
-            return vec![];
-        }
+        let remaining_bits = 32 - new_mask;
+        let as_u32 = self.address_as_u32();
+        let bitmask = !((1 << remaining_bits) - 1);
 
+        let mut network_id = (as_u32 & bitmask) >> remaining_bits;
         let mut blocks = Vec::with_capacity(num_networks);
 
-        let as_u32 = self
-            .address
-            .into_iter()
-            .fold(0_u32, |acc, octet| (acc << 8) + octet as u32);
-
-        let bit_mask = !((1 << (32 - new_mask)) - 1);
-        let mut network_id = (as_u32 & bit_mask) >> (32 - new_mask);
-
         for _ in 0..num_networks {
-            let new_as_u32 = network_id << (32 - new_mask);
+            let new_as_u32 = network_id << remaining_bits;
             blocks.push(Self::from_u32_address(new_as_u32, new_mask));
             network_id += 1;
         }
 
         blocks
+    }
+
+    // Converts the array representing the address to a
+    pub fn address_as_u32(&self) -> u32 {
+        // 'self.address' is an array of four u8, so it is cheap to copy them
+        self.address
+            .into_iter()
+            .fold(0_u32, |acc, octet| (acc << 8) + octet as u32)
+    }
+
+    fn new_mask_for(&self, num_networks: usize) -> Option<u8> {
+        if num_networks == 0 {
+            return None;
+        }
+
+        let bits_needed = minimum_bits_needed(num_networks);
+        let mask = self.mask + bits_needed;
+
+        if mask <= 32 {
+            Some(mask)
+        } else {
+            None
+        }
     }
 }
 
@@ -136,8 +158,9 @@ fn extract_address_and_mask(s: &str) -> Result<([u8; 4], u8), <IpAddressBlock as
         if idx == 3 {
             let mut last_iter = octet.split('/');
 
-            // Split iterator returns at least one Some
-            let octet_str = last_iter.next().unwrap();
+            let octet_str = last_iter
+                .next()
+                .expect("split iterator must have  at least one element");
             address[idx] = parse_octet(octet_str)?;
 
             let mask_str = last_iter.next().ok_or(IpAddressParseError {
@@ -214,7 +237,8 @@ mod tests {
     #[test]
     fn correctly_creates_address_from_u32() {
         let addr = "201.70.64.0/24".parse::<IpAddressBlock>().unwrap();
-        let as_u32 = addr.address
+        let as_u32 = addr
+            .address
             .into_iter()
             .fold(0_u32, |acc, octet| (acc << 8) + octet as u32);
 
@@ -246,8 +270,13 @@ mod tests {
         let addr = "181.56.0.0/16".parse::<IpAddressBlock>().unwrap();
         let mut it = addr.subnet_flsm(1000).into_iter().rev();
 
-
-        assert_eq!(it.next().unwrap(), "181.56.249.192/26".parse::<IpAddressBlock>().unwrap());
-        assert_eq!(it.next().unwrap(), "181.56.249.128/26".parse::<IpAddressBlock>().unwrap());
+        assert_eq!(
+            it.next().unwrap(),
+            "181.56.249.192/26".parse::<IpAddressBlock>().unwrap()
+        );
+        assert_eq!(
+            it.next().unwrap(),
+            "181.56.249.128/26".parse::<IpAddressBlock>().unwrap()
+        );
     }
 }
