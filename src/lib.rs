@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, str::FromStr, error::Error};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct IpAddressBlock {
@@ -37,6 +37,8 @@ pub enum IpAddressErrorKind {
 pub struct IpAddressParseError {
     pub(crate) kind: IpAddressErrorKind,
 }
+
+impl Error for IpAddressParseError {}
 
 impl IpAddressParseError {
     pub fn kind(&self) -> &IpAddressErrorKind {
@@ -127,7 +129,6 @@ impl IpAddressBlock {
     // This method takes ownership of host because it is more flexible for me and
     // IMO, the user only constructs a 'Vec<NetworkHosts>' to use this method
     pub fn subnet_vlsm(&self, mut subnets: Vec<NetworkHosts>) -> Option<Vec<(NetworkHosts, Self)>> {
-        // TODO: consider the idea of returning an iterator instead of Vec
         // Check if this address block can hold all the given network hosts
         let total_hosts: u32 = subnets.iter().map(NetworkHosts::hosts).sum();
 
