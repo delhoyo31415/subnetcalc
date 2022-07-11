@@ -355,7 +355,7 @@ mod tests {
             NetworkHosts::new(2000),
             NetworkHosts::new(1000),
         ];
-        let expect = vec![
+        let expected = vec![
             (
                 NetworkHosts::new(5000),
                 "20.30.0.0/19".parse::<IpAddressBlock>().unwrap(),
@@ -374,6 +374,44 @@ mod tests {
             ),
         ];
 
-        assert_eq!(addr.subnet_vlsm(nets).unwrap(), expect);
+        assert_eq!(addr.subnet_vlsm(nets).unwrap(), expected);
+
+        let addr = "192.168.0.0/24".parse::<IpAddressBlock>().unwrap();
+        let nets = vec![
+            NetworkHosts::new(20),
+            NetworkHosts::new(80),
+            NetworkHosts::new(20),
+            NetworkHosts::new(2),
+            NetworkHosts::new(2),
+            NetworkHosts::new(2),
+        ];
+
+        let expected = vec![
+            (
+                NetworkHosts::new(80),
+                "192.168.0.0/25".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(20),
+                "192.168.0.128/27".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(20),
+                "192.168.0.160/27".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(2),
+                "192.168.0.192/30".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(2),
+                "192.168.0.196/30".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(2),
+                "192.168.0.200/30".parse::<IpAddressBlock>().unwrap(),
+            ),
+        ];
+        assert_eq!(addr.subnet_vlsm(nets).unwrap(), expected);
     }
 }
