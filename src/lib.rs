@@ -6,6 +6,24 @@ pub struct IpAddressBlock {
     pub mask: u8,
 }
 
+// This is wrapper (newtype) around u32, so it can be copied bit by bit
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub struct NetworkHosts(u32);
+
+impl NetworkHosts {
+    pub fn new(hosts: u32) -> Self {
+        Self(hosts)
+    }
+
+    pub fn hosts(&self) -> u32 {
+        self.0
+    }
+
+    pub fn required_mask(&self) -> u8 {
+        32 - minimum_bits_needed(self.0 as usize + 2)
+    }
+}
+
 #[derive(Debug)]
 pub enum IpAddressErrorKind {
     IncorrectFormat,
@@ -79,11 +97,9 @@ impl IpAddressBlock {
         Self::new(address, mask)
     }
 
-    pub fn subnet_flsm(&self, num_networks: usize) -> Vec<Self> {
-        let new_mask = match self.new_mask_for(num_networks) {
-            Some(mask) => mask,
-            None => return Vec::new(),
-        };
+    pub fn subnet_flsm(&self, num_networks: usize) -> Option<Vec<Self>> {
+        // TODO: consider the idea of returning an iterator instead of Vec
+        let new_mask = self.new_mask_for(num_networks)?;
 
         let remaining_bits = 32 - new_mask;
         let as_u32 = self.address_as_u32();
@@ -98,10 +114,48 @@ impl IpAddressBlock {
             network_id += 1;
         }
 
-        blocks
+        Some(blocks)
     }
 
-    // Converts the array representing the address to a
+    pub fn available_hosts(&self) -> u32 {
+        (1 << (32 - self.mask)) - 2
+    }
+
+    // Assign each network host a subnetwork using VLSM. If it not possible, return
+    // None
+    //
+    // This method takes ownership of host because it is more flexible for me and
+    // IMO, the user only constructs a 'Vec<NetworkHosts>' to use this method
+    pub fn subnet_vlsm(&self, mut subnets: Vec<NetworkHosts>) -> Option<Vec<(NetworkHosts, Self)>> {
+        // TODO: consider the idea of returning an iterator instead of Vec
+        // Check if this address block can hold all the given network hosts
+        let total_hosts: u32 = subnets.iter().map(NetworkHosts::hosts).sum();
+
+        if total_hosts > self.available_hosts() {
+            return None;
+        }
+
+        subnets.sort_unstable_by(|x, y| y.cmp(x));
+
+        let mut new_addr_as_u32 = self.address_as_u32();
+        let mut result = Vec::with_capacity(subnets.len());
+
+        for subnet in subnets.into_iter() {
+            result.push((
+                subnet,
+                Self::from_u32_address(new_addr_as_u32, subnet.required_mask()),
+            ));
+
+            let remaining_bits = 32 - subnet.required_mask();
+            let bitmask = !((1 << remaining_bits) - 1);
+            let new_network_id = ((new_addr_as_u32 & bitmask) >> remaining_bits) + 1;
+            new_addr_as_u32 = new_network_id << remaining_bits;
+        }
+
+        Some(result)
+    }
+
+    // Converts the array representing the address to a u32
     pub fn address_as_u32(&self) -> u32 {
         // 'self.address' is an array of four u8, so it is cheap to copy them
         self.address
@@ -256,7 +310,7 @@ mod tests {
             "201.70.64.128/27".parse::<IpAddressBlock>().unwrap(),
             "201.70.64.160/27".parse::<IpAddressBlock>().unwrap(),
         ];
-        assert_eq!(addr.subnet_flsm(6), expected);
+        assert_eq!(addr.subnet_flsm(6).unwrap(), expected);
 
         let addr = "198.150.74.0/23".parse::<IpAddressBlock>().unwrap();
         let expected = vec![
@@ -265,10 +319,10 @@ mod tests {
             "198.150.75.0/25".parse::<IpAddressBlock>().unwrap(),
             "198.150.75.128/25".parse::<IpAddressBlock>().unwrap(),
         ];
-        assert_eq!(addr.subnet_flsm(4), expected);
+        assert_eq!(addr.subnet_flsm(4).unwrap(), expected);
 
         let addr = "181.56.0.0/16".parse::<IpAddressBlock>().unwrap();
-        let mut it = addr.subnet_flsm(1000).into_iter().rev();
+        let mut it = addr.subnet_flsm(1000).unwrap().into_iter().rev();
 
         assert_eq!(
             it.next().unwrap(),
@@ -278,5 +332,47 @@ mod tests {
             it.next().unwrap(),
             "181.56.249.128/26".parse::<IpAddressBlock>().unwrap()
         );
+    }
+
+    #[test]
+    fn required_mask_for_hosts() {
+        assert_eq!(NetworkHosts::new(30000).required_mask(), 17);
+        assert_eq!(NetworkHosts::new(16383).required_mask(), 17);
+        assert_eq!(NetworkHosts::new(16381).required_mask(), 18);
+        assert_eq!(NetworkHosts::new(8000).required_mask(), 19);
+        assert_eq!(NetworkHosts::new(2).required_mask(), 30);
+        assert_eq!(NetworkHosts::new(1).required_mask(), 30);
+    }
+
+    #[test]
+    fn subnets_vlsm_correctly() {
+        let addr = "20.30.0.0/18".parse::<IpAddressBlock>().unwrap();
+
+        let nets = vec![
+            NetworkHosts::new(1000),
+            NetworkHosts::new(5000),
+            NetworkHosts::new(2000),
+            NetworkHosts::new(1000),
+        ];
+        let expect = vec![
+            (
+                NetworkHosts::new(5000),
+                "20.30.0.0/19".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(2000),
+                "20.30.32.0/21".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(1000),
+                "20.30.40.0/22".parse::<IpAddressBlock>().unwrap(),
+            ),
+            (
+                NetworkHosts::new(1000),
+                "20.30.44.0/22".parse::<IpAddressBlock>().unwrap(),
+            ),
+        ];
+
+        assert_eq!(addr.subnet_vlsm(nets).unwrap(), expect);
     }
 }
