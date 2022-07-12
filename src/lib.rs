@@ -1,5 +1,4 @@
-use std::{fmt::Display, str::FromStr, error::Error};
-
+use std::{error::Error, fmt::Display, num::ParseIntError, str::FromStr};
 #[derive(Debug, PartialEq, Eq)]
 pub struct IpAddressBlock {
     pub address: [u8; 4],
@@ -21,6 +20,48 @@ impl NetworkHosts {
 
     pub fn required_mask(&self) -> u8 {
         32 - minimum_bits_needed(self.0 as usize + 2)
+    }
+}
+
+#[derive(Debug)]
+pub enum NetworkHostsParseError {
+    IncorrectFormat(String, ParseIntError),
+    Zero,
+}
+
+impl Display for NetworkHostsParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NetworkHostsParseError::IncorrectFormat(string, _) => {
+                write!(f, "{string} is not a valid host")
+            }
+            NetworkHostsParseError::Zero => write!(f, "networks with 0 hosts are not allowed"),
+        }
+    }
+}
+
+impl Error for NetworkHostsParseError {
+    fn cause(&self) -> Option<&dyn Error> {
+        match self {
+            NetworkHostsParseError::IncorrectFormat(_, cause) => Some(cause),
+            _ => None,
+        }
+    }
+}
+
+impl FromStr for NetworkHosts {
+    type Err = NetworkHostsParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let num = s
+            .parse::<u32>()
+            .map_err(|err| NetworkHostsParseError::IncorrectFormat(s.to_string(), err))?;
+
+        if num != 0 {
+            Ok(Self::new(num))
+        } else {
+            Err(NetworkHostsParseError::Zero)
+        }
     }
 }
 
@@ -48,7 +89,7 @@ impl IpAddressParseError {
     fn __description(&self) -> String {
         match &self.kind {
             IpAddressErrorKind::IncorrectFormat => {
-                "the string is not in a correct format".to_string()
+                "the string is not in a correct IP format".to_string()
             }
             IpAddressErrorKind::MissingMask => "the mask is missing".to_string(),
             IpAddressErrorKind::OctetOutOfRange(out) => format!("'{out}' is not a valid octet"),
@@ -100,7 +141,6 @@ impl IpAddressBlock {
     }
 
     pub fn subnet_flsm(&self, num_networks: usize) -> Option<Vec<Self>> {
-        // TODO: consider the idea of returning an iterator instead of Vec
         let new_mask = self.new_mask_for(num_networks)?;
 
         let remaining_bits = 32 - new_mask;
@@ -123,7 +163,7 @@ impl IpAddressBlock {
         (1 << (32 - self.mask)) - 2
     }
 
-    // Assign each network host a subnetwork using VLSM. If it not possible, return
+    // Assign each network host a subnetwork using VLSM. If it is not possible, return
     // None
     //
     // This method takes ownership of host because it is more flexible for me and
