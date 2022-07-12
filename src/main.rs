@@ -1,9 +1,15 @@
 use std::{env, error::Error};
 
-use subnetcalc::{NetworkHosts, IpAddressBlock};
+use subnetcalc::{IpAddressBlock, NetworkHosts};
 
-const HELP: &str = "
-TODO";
+const HELP: &str = "usage: subnetcalc IPADDR_BLOCK OPTION ARGS
+
+* IPADDR_BLOCK: Address block which is going to be divided
+* OPTION: Strategy to follow to divide the address block
+    --vlsm | -v: Uses the Variable Length Subnet Mask (VLSM) strategy. In this case, ARGS is a 
+    space separated set of numbers which represent the number of host each network is going to have
+    --flsm | -f: Uses the Fixed Length Subnet Mask (FLSM) strategy. In this case ARGS is the number 
+    of subnets you want";
 
 #[derive(Debug)]
 enum CliOption {
@@ -18,20 +24,20 @@ impl CliOption {
         // The first element is the executable name, so we ignore it
         args.next();
 
-        let ipaddr = match args.next() {
-            Some(text) if text == "--help" => return Ok(CliOption::Help),
-            Some(ipaddr) => ipaddr.parse()?,
+        let ipaddr_block = match args.next() {
+            Some(text) if text == "--help" || text == "-h" => return Ok(CliOption::Help),
+            Some(ipaddr_block) => ipaddr_block.parse()?,
             None => Err("missing first option")?,
         };
 
         let option = match args.next() {
-            Some(opt) if opt == "--vlsm" => {
+            Some(opt) if opt == "--vlsm" || opt == "-v" => {
                 let results = args
                     .map(|arg| arg.parse::<NetworkHosts>())
                     .collect::<Result<Vec<_>, _>>()?;
                 RunOptions::VLSM(results)
             }
-            Some(opt) if opt == "--flsm" => {
+            Some(opt) if opt == "--flsm" || opt == "-f" => {
                 let num = args
                     .next()
                     .ok_or("missing option")?
@@ -43,7 +49,10 @@ impl CliOption {
             None => Err("missing option")?,
         };
 
-        Ok(CliOption::Run(Config { ipaddr, option }))
+        Ok(CliOption::Run(Config {
+            ipaddr_block,
+            option,
+        }))
     }
 }
 
@@ -55,7 +64,7 @@ enum RunOptions {
 
 #[derive(Debug)]
 struct Config {
-    ipaddr: IpAddressBlock,
+    ipaddr_block: IpAddressBlock,
     option: RunOptions,
 }
 
