@@ -5,7 +5,7 @@
 
 It takes an address block and divides it into the required subnetworks using the specified strategy. For more information, type `subnetcalc --help`
 
-# Examples
+## Examples
 If you have the address block `201.70.64.0/24` and you want to divide into 10 subnetworks with equal size, you would type (note that the symbol `$` is used to indicate that the line which begins with that symbol is a shell command)
 ```
 $ subnetcalc 201.70.64.0/24 --flsm 10
@@ -31,16 +31,16 @@ $ 20.30.0.0/18 --vlsm 1000 5000 2000 100
 4) 1000 - 20.30.44.0/22
 ```
 
-# Build
+## Build
 You need to first install Rust on your system. Then type the following:
 ```
-$ https://github.com/delhoyo31415/subnetcalc
+$ git clone https://github.com/delhoyo31415/subnetcalc
 $ cd subnetcalc
 $ cargo build --release
 ```
 The executable will be located in `target/release/subnetcalc`
 
-# Final notes
+## Final notes
 The main purpose of this project was getting familiarized with the Rust programming language so it is likely some parts can be improved. I am aware of the existance of crates like [clap](https://crates.io/crates/clap) for argument parsing or [anyhow](https://crates.io/crates/anyhow) and [thiserror](https://crates.io/crates/thiserror) but, for this simple project, I wanted to make everything from scratch.
 
 Every commit is licensed under the MIT license even though the text with its content does not appear in some of them.
