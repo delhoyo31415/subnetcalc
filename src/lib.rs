@@ -1,4 +1,5 @@
 use std::{error::Error, fmt::Display, num::ParseIntError, str::FromStr};
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct IpAddressBlock {
     pub address: [u8; 4],
@@ -217,6 +218,16 @@ impl IpAddressBlock {
         } else {
             None
         }
+    }
+}
+
+impl Display for IpAddressBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}.{}/{}",
+            self.address[0], self.address[1], self.address[2], self.address[3], self.mask
+        )
     }
 }
 

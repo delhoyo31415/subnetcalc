@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "subnetting-calculator"
+name = "subnetcalc"
 version = "0.1.0"

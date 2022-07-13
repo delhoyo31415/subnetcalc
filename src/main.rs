@@ -69,7 +69,30 @@ struct Config {
 }
 
 fn show_subnets(config: Config) -> Result<(), Box<dyn Error + 'static>> {
-    dbg!(config);
+    match config.option {
+        RunOptions::FLSM(target_subnets) => match config.ipaddr_block.subnet_flsm(target_subnets) {
+            Some(result) => {
+                for (idx, subnet) in result.iter().enumerate() {
+                    println!("{}) {}", idx + 1, subnet);
+                }
+            }
+            None => println!(
+                "It is not possible to divide {} in {} subnetworks using FLSM",
+                config.ipaddr_block, target_subnets
+            ),
+        },
+        RunOptions::VLSM(nets) => match config.ipaddr_block.subnet_vlsm(nets) {
+            Some(result) => {
+                for (idx, (net_hosts, nets)) in result.iter().enumerate() {
+                    println!("{}) {} - {}", idx + 1, net_hosts.hosts(), nets);
+                }
+            }
+            None => println!(
+                "It is not possible to subnet {} using VLSM with those requirements",
+                config.ipaddr_block
+            ),
+        },
+    }
     Ok(())
 }
 
