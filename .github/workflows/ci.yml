@@ -1,0 +1,42 @@
+name: checks
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install stable toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Run tests
+      run: cargo test --verbose
+
+  rustfmt:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install stable toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        components: rustfmt
+        toolchain: stable
+        override: true
+
+    - name: Run cargo fmt
+      run: cargo fmt --all --check
